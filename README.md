@@ -8,3 +8,7 @@ Consiste en una forma de poder dar seguimiento a inversiones personales, se busc
 - Tratar de predecir posibles comportamientos
 
 ## Calculo de precios y pay-offs de opciones
+
+
+
+## Modelos lineales y redes neuronales
