@@ -2,7 +2,6 @@ import streamlit as st
 import plotly.graph_objects as go
 from pyvis.network import Network
 import networkx as nx
-import tempfile
 
 st.set_page_config(layout="wide")
 

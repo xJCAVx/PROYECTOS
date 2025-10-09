@@ -1,12 +1,14 @@
 # PROYECTO DERIVADOS
 
 import math
+from scipy.stats import norm
 
 
 # ------------------------------------------- FUNCIONES -----------------------------------------------
 
 # Funcion para traer a Valor Presente 
 def B( r, delta, tiempo):
+
     if tiempo == "discreto":
         return (1 + r) ** (-delta)
     else:
@@ -18,12 +20,14 @@ def B( r, delta, tiempo):
 
 # Clase del activo subyacente sin dividendos
 class Subyacente:
+
     def __init__(self,S0):
         self.S0 = S0                                                    # Precio inicial del subyacente
 
 
 # Clase de los atributos generales de un derivado
 class Derivado:
+
     def __init__(self, subyacente, strike, vencimiento, periodos, interes, tipo, posicion):
 
         self.subyacente = subyacente                                    # Subyacente
@@ -78,13 +82,61 @@ class Put(Derivado):
             return -max(self.K - ST,0)
 
 
+# Subclase Call Digital Europea
+class Call_Digital(Derivado):
+    
+    def pay_off(self, ST, subtipo, M = None):
+     
+        if subtipo == "cash or nothing":                                 # Cash or nothing europeo
+            if ST > self.K:
+                if self.posicion == "largo":
+                    return M
+                else:
+                    return -M
+            else:
+                return 0
+
+        if subtipo == "asset or nothing":                                # Asset or nothing europeo                                                        
+            if ST > self.K:
+                if self.posicion == "largo":
+                    return ST
+                else:
+                    return -ST
+            else:
+                return 0
+            
+
+# Subclase Put Digital Europea 
+class Put_Digital(Derivado):
+
+    def pay_off(self, ST, subtipo, M = None):
+     
+        if subtipo == "cash or nothing":                                # Cash or nothing europeo
+            if ST < self.K:
+                if self.posicion == "largo":
+                    return M
+                else:
+                    return -M
+            else:
+                return 0
+
+        if subtipo == "asset or nothing":                                # Asset or nothing europeo    
+            if ST < self.K:
+                if self.posicion == "largo":                
+                    return ST
+                else:
+                    return -ST
+            else:
+                return 0
+
+
 # ----------------------------------------- ARBOLES BINOMIALES ----------------------------------------
 
 
 class Arbol_Binomial:
         
-    def __init__(self, S0, T, N, r, tipo, u = None, d = None):
-        self.S0 = S0                                                    # Subyacente
+    def __init__(self, Subyacente, T, N, r, tipo, u = None, d = None):
+        self.Subyacente = Subyacente                                    # Subyacente
         self.T = T                                                      # Vencimiento
         self.N = N                                                      # Periodos
         self.delta = T/N                                                # Delta
@@ -92,7 +144,7 @@ class Arbol_Binomial:
         self.tipo = tipo                                                # General / Recombinante / Multiplicativo
         self.u = u                                                      # Tasa de subida (multplicativo)
         self.d = d                                                      # Tasa de bajada (multplicativo)
-        self.niveles = [[S0]]                                           # Nodos
+        self.niveles = [[Subyacente.S0]]                                           # Nodos
         self.Q = []                                                     # Probabilidades neutras al riesgo
         
         # Construccion de un arbol Multiplicativo
@@ -100,7 +152,7 @@ class Arbol_Binomial:
             for i in range(1,self.N + 1): # i es el tiempo (1,N)
                 nivel = []
                 for j in range(i+1): # j es el nodo en el tiempo i 
-                    nodo = self.S0 * (self.u ** j) * (self.d ** (i - j))
+                    nodo = self.Subyacente.S0 * (self.u ** j) * (self.d ** (i - j))
                     nivel.append(nodo)
                 self.niveles.append(nivel)
 
@@ -108,7 +160,7 @@ class Arbol_Binomial:
     # Construccion de arbol General o Recombinante (se le deben pasar una lista con los nodos para cada tiempo)
     def agregar_nivel(self,nodos):
         self.niveles.append(nodos)
-        
+
 
     # Calculo de Q
     def probabilidades_neutras_al_riesgo(self, tiempo):
@@ -122,7 +174,7 @@ class Arbol_Binomial:
                     Q_t.append(q_j)
                 self.Q.append(Q_t)
             return self.Q
-        
+
         # Caso General / Recombinante
         else:
             for i in range(self.N): # i es el tiempo (0,N-1)
@@ -143,26 +195,30 @@ class Arbol_Binomial:
 class Cobertura:
     
     def __init__(self, derivado, arbol):
-        self.derivado = derivado                                        # Call / Put
-        self.arbol = arbol                                              # Árbol binomial ya construido
-        self.valores = []                                                 # Valor de la cobertura / derivado en cada nodo
+        self.derivado = derivado                                         # Call / Put
+        self.arbol = arbol                                               # Árbol binomial ya construido
+        self.valores = []                                                # Valor de la cobertura / derivado en cada nodo
         self.alphas = []                                                 # Cantidad de subyacente a mantener en cada nodo
         self.betas = []                                                  # Cantidad invertida en el activo libre de riesgo en cada nodo
+        self.optimos = []                                                # Nodos optimos de ejercicio en opciones americanas (1 si es optimo, 0 si no)
 
     # Calculo del valor del derivado, sus alphas y betas en cada tiempo para cualquier tipo de árbol
-    def calcular_cobertura(self, tiempo):
+    def calcular_cobertura(self, tiempo, subtipo = None, M = None):
 
-        if self.derivado.tipo == "Europea":
+        if self.derivado.tipo == "europea":
 
             STs = self.arbol.niveles[-1]
-            Pay_offs = [self.derivado.pay_off(ST) for ST in STs]
+            if isinstance(self.derivado, (Call_Digital,Put_Digital)):
+                Pay_offs = [self.derivado.pay_off(ST,subtipo, M) for ST in STs]
+            else:
+                Pay_offs = [self.derivado.pay_off(ST) for ST in STs]
             self.valores.append(Pay_offs)
             
             for i in reversed(range(self.arbol.N)): # Se recorre el arbol hacia atras (N-1, 0)
                 valores_t = []
                 alphas_t = []
                 betas_t = []
-                
+
                 for j in range(len(self.arbol.niveles[i])): # Nodo j en el tiempo i 
                     Sd = self.arbol.niveles[i + 1][j]
                     Su = self.arbol.niveles[i + 1][j + 1]
@@ -176,7 +232,7 @@ class Cobertura:
                     # Calculo de la alpha en el nodo ij
                     alpha = (Vu - Vd) / (Su - Sd)
                     alphas_t.append(alpha)
-                    
+
                     # Caluclo de la beta en el nodo ij
                     beta = B( self.arbol.r, self.arbol.delta, tiempo) * ( Vu - alpha * Su)
                     betas_t.append(beta)
@@ -186,31 +242,74 @@ class Cobertura:
                 self.betas.insert(0, betas_t)
 
         else:
-            None
+            STs = self.arbol.niveles[-1]
+            Pay_offs = [self.derivado.pay_off(ST) for ST in STs]
+            self.valores.append(Pay_offs)
+
+            for i in reversed(range(self.arbol.N)): # Se recorre el arbol hacia atras (N-1, 0)
+                valores_t = []
+                alphas_t = []
+                betas_t = []
+                optimos_t = []
+
+                for j in range(len(self.arbol.niveles[i])): # Nodo j en el tiempo i 
+                    Sd = self.arbol.niveles[i + 1][j]
+                    Su = self.arbol.niveles[i + 1][j + 1]
+                    Vd = self.valores[0][j]
+                    Vu = self.valores[0][j + 1]
+
+                    # Calculo del valor del derivado en en nodo ij si se deja vivir un periodo más
+                    V_teorico = B( self.arbol.r, self.arbol.delta, tiempo) * ( Vu * self.arbol.Q[i][j] + Vd * (1 - self.arbol.Q[i][j]) )
+
+                    # Calculo del valor del derivado en el nodo ij si se ejerce en ese momento
+                    ST_actual = self.arbol.niveles[i][j]
+                    V_actual = self.derivado.pay_off(ST_actual)
+                    
+                    # Maximo entre ambos
+                    Vj = max(V_actual, V_teorico)
+                    valores_t.append(Vj)
+
+                    # Creacion de nodos optimos
+                    if max(V_actual, V_teorico) == V_actual:
+                        optimos_t.append(1)
+                    else:
+                        optimos_t.append(0)
+
+                    # Calculo de la alpha en el nodo ij
+                    alpha = (Vu - Vd) / (Su - Sd)
+                    alphas_t.append(alpha)
+                    
+                    # Caluclo de la beta en el nodo ij
+                    beta = B( self.arbol.r, self.arbol.delta, tiempo) * ( Vu - alpha * Su)
+                    betas_t.append(beta)
+
+                self.valores.insert(0, valores_t)
+                self.alphas.insert(0, alphas_t)
+                self.betas.insert(0, betas_t)
+                self.optimos.insert(0,optimos_t)
 
 
+# -------------------------------------------- BLACK SCHOLES ------------------------------------------
 
 
+# Precio de opciones call y put europeas
+def Black_Scholes(derivado, sigma): 
 
+    d1 = ( 1 / (sigma * math.sqrt(derivado.T)) ) * ( math.log(derivado.subyacente.S0/derivado.K) + (derivado.r + 1/2 * sigma**2) * derivado.T)
 
+    d2 = d1 - sigma * math.sqrt(derivado.T)
 
+    if isinstance(derivado, Call):
+        precio = derivado.subyacente.S0 * norm.cdf(d1) - derivado.K * math.exp(-derivado.r * derivado.T) * norm.cdf(d2)
+        if derivado.posicion == "largo":
+            return precio
+        else:
+            return -precio
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    if isinstance(derivado, Put):
+        precio = derivado.K * math.exp(-derivado.r * derivado.T) * norm.cdf(-d2) + derivado.subyacente.S0 * norm.cdf(-d1)
+        if derivado.posicion == "largo":
+            return precio
+        else:
+            return -precio
 
