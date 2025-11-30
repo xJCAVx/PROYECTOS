@@ -229,7 +229,11 @@ contrato3 = Call(subyacente_3, 105, 1, 0, 0.05, "europeo","corto")
 print(Black_Scholes(contrato3,0.2))
 print()
 
+subyacente_ejercicio = Subyacente(50)
+contrato_ejercicio = Put(subyacente_ejercicio, 50, 1, 0, 0.05, "europeo", "corto ")
 
+print(Black_Scholes(contrato_ejercicio,0.2))
+print()
 
 # -------------------------------------- Pruebas Opciones Americanas ------------------------------------------
 
