@@ -2,6 +2,7 @@
 
 import math
 from scipy.stats import norm
+import plotly.graph_objects as go
 
 
 # ------------------------------------------- FUNCIONES -----------------------------------------------
@@ -14,6 +15,124 @@ def B( r, delta, tiempo):
     else:
         return math.exp( -r * delta)
 
+def grafica_arbol(arbol, tipo):
+    niveles = arbol.niveles
+
+    nodes = []
+    node_id_map = {}
+    contador_nombres = 0   # Para S0, S1, S2, ...
+
+    for t, nivel in enumerate(niveles):
+        row = []
+        for j, precio in enumerate(nivel):
+            node_id = f"{t}-{j}"
+            nombre_nodo = f"S{contador_nombres}"
+            contador_nombres += 1
+
+            node = {
+                "id": node_id,
+                "x": t,
+                "y": float(precio),
+                "label": str(round(precio, 3)),   # precio arriba
+                "name": nombre_nodo              # nombre abajo
+            }
+            row.append(node)
+            node_id_map[node_id] = node
+        nodes.append(row)
+
+    # ------------------------------
+    # Construcción de conexiones según el tipo
+    # ------------------------------
+    edges = []
+
+    for t in range(len(nodes) - 1):
+        nivel_actual = nodes[t]
+        nivel_siguiente = nodes[t+1]
+
+        for j, parent in enumerate(nivel_actual):
+
+            if tipo == "General":
+                hijo1 = 2*j
+                hijo2 = 2*j + 1
+                if hijo1 < len(nivel_siguiente):
+                    edges.append((parent, nivel_siguiente[hijo1]))
+                if hijo2 < len(nivel_siguiente):
+                    edges.append((parent, nivel_siguiente[hijo2]))
+
+            else:
+                if j < len(nivel_siguiente):
+                    edges.append((parent, nivel_siguiente[j]))
+                if j + 1 < len(nivel_siguiente):
+                    edges.append((parent, nivel_siguiente[j+1]))
+
+    # ------------------------------
+    # GRAFICAR
+    # ------------------------------
+
+    fig = go.Figure()
+
+    # Líneas
+    for parent, child in edges:
+        fig.add_trace(go.Scatter(
+            x=[parent["x"], child["x"]],
+            y=[parent["y"], child["y"]],
+            mode="lines",
+            line=dict(color="gray", width=1),
+            hoverinfo="skip",
+            showlegend=False
+        ))
+
+    # Nodos
+    for row in nodes:
+        x = [n["x"] for n in row]
+        y = [n["y"] for n in row]
+
+        precios = [n["label"] for n in row]
+        nombres = [n["name"] for n in row]
+
+        # Precio arriba
+        fig.add_trace(go.Scatter(
+            x=x,
+            y=y,
+            mode="markers+text",
+            text=precios,
+            textposition="top center",
+            hoverinfo="skip",
+            marker=dict(
+                size=20,
+                color="#1f77b4",
+                line=dict(width=1.5, color="black")
+            ),
+            showlegend=False
+        ))
+
+        # Nombre debajo
+        fig.add_trace(go.Scatter(
+            x=x,
+            y=y,
+            mode="markers+text",
+            text=nombres,
+            textposition="bottom center",
+            showlegend=False,
+            hoverinfo="skip",
+            marker=dict(
+                size=20,
+                color="#1f77b4",
+                line=dict(width=1.5, color="black")
+            ),
+        ))
+
+    fig.update_layout(
+        dragmode="pan",
+        xaxis=dict(showgrid=False, zeroline=False, title="Tiempo"),
+        yaxis=dict(showgrid=False, zeroline=False, title="Precio Subyacente"),
+        height=650,
+        margin=dict(l=20, r=20, t=20, b=20)
+    )
+
+    return fig
+
+
 
 # -------------------------------------------- CLASES -------------------------------------------------
 
@@ -21,8 +140,12 @@ def B( r, delta, tiempo):
 # Clase del activo subyacente sin dividendos
 class Subyacente:
 
-    def __init__(self,S0):
+    def __init__(self,S0, tipo_subyacente = None, monto_dividendo = None, tasa_dividendo = None, periodicidad = None):
         self.S0 = S0                                                    # Precio inicial del subyacente
+        self.tipo_subyacente = tipo_subyacente                          # Sin dividendos / Con dividendos discretos / Con dividendos continuos
+        self.monto_dividendo = monto_dividendo                          # Monto dividendos discretos
+        self.tasa_dividendo = tasa_dividendo                            # Tasa dividendos continuos
+        self.periodicidad = periodicidad                                # Cada cuanto se pagan los dividendos 
 
 
 # Clase de los atributos generales de un derivado
@@ -69,7 +192,7 @@ class Call(Derivado):
             return max(ST - self.K, 0)
         else:
             return - max(ST - self.K, 0)
-    
+
 
 # Subclase del derivado Put
 class Put(Derivado):
@@ -139,27 +262,90 @@ class Arbol_Binomial:
         self.Subyacente = Subyacente                                    # Subyacente
         self.T = T                                                      # Vencimiento
         self.N = N                                                      # Periodos
-        self.delta = T/N                                                # Delta
+        self.delta = T/N if T != 0 and N != 0 else 0                    # Delta
         self.r = r                                                      # Tasa de interes     
         self.tipo = tipo                                                # General / Recombinante / Multiplicativo
-        self.u = u                                                      # Tasa de subida (multplicativo)
-        self.d = d                                                      # Tasa de bajada (multplicativo)
+        self.u = u                                                      # Tasa de subida (multiplicativo)
+        self.d = d                                                      # Tasa de bajada (mulitplicativo)
         self.niveles = [[Subyacente.S0]]                                           # Nodos
         self.Q = []                                                     # Probabilidades neutras al riesgo
-        
-        # Construccion de un arbol Multiplicativo
-        if tipo == "multiplicativo":
-            for i in range(1,self.N + 1): # i es el tiempo (1,N)
-                nivel = []
-                for j in range(i+1): # j es el nodo en el tiempo i 
-                    nodo = self.Subyacente.S0 * (self.u ** j) * (self.d ** (i - j))
-                    nivel.append(nodo)
-                self.niveles.append(nivel)
+
+    # Construccion del arbol multiplicativo
+    def construir_arbol_multiplicativo(self):
+        self.niveles = [[self.Subyacente.S0]]  
+        for i in range(1,self.N + 1): # i es el tiempo (1,N)
+            nivel = []
+            for j in range(i+1): # j es el nodo en el tiempo i 
+                nodo = self.Subyacente.S0 * (self.u ** j) * (self.d ** (i - j))
+                nivel.append(nodo)
+            self.niveles.append(nivel)
+
+
+    def nombres_nodos(self):
+        lista_ids = []
+        indice = 0
+        for t, fila in enumerate(self.niveles):
+            for j, precio in enumerate(fila):
+                etiqueta = f"S{indice}"
+                lista_ids.append(etiqueta)
+                indice += 1
+        return lista_ids
+
+    def obtener_posicion(self, nombre_nodo):
+
+        k = int(nombre_nodo[1:])   # extrae el número
+        contador = 0
+
+        for t, fila in enumerate(self.niveles):
+            for j, _ in enumerate(fila):
+                if contador == k:
+                    return t, j
+                contador += 1
 
 
     # Construccion de arbol General o Recombinante (se le deben pasar una lista con los nodos para cada tiempo)
     def agregar_nivel(self,nodos):
         self.niveles.append(nodos)
+
+    # Para 
+    def cambiar_nodo(self, tiempo, nodo_anterior, nodo_nuevo):
+        self.niveles[tiempo][nodo_anterior]  = nodo_nuevo
+
+
+    def arbol_temporal(self):
+        if self.tipo == "General":
+            self.niveles = [[self.Subyacente.S0]]   
+            paso = 0.5  # ajustable
+
+            for t in range(1, self.N + 1):
+                nivel_prev = self.niveles[-1]
+                delta_t = paso / (2 ** (t - 1))   # decrementa con la profundidad
+                nivel = []
+                for p in nivel_prev:
+                    nivel.append(round(p - delta_t, 6))
+                    nivel.append(round(p + delta_t, 6))
+                nivel.sort()
+                self.agregar_nivel(nivel)
+
+        elif self.tipo == "Recombinante":
+            u_temporal = 1.2
+            d_temporal = 1/1.2
+            self.niveles = [[self.Subyacente.S0]]    
+        
+            for t in range(1, self.N + 1):
+                nivel = [round(self.Subyacente.S0 * (u_temporal**j) * (d_temporal**(t-j)), 6) for j in range(t+1)]
+                nivel.sort()  # ordenado
+                self.agregar_nivel(nivel)
+
+        
+        else:   # Multiplicativo         
+            u_temporal = 1.2
+            d_temporal = 1/1.2
+            self.niveles = [[self.Subyacente.S0]]    
+            for t in range(1, self.N + 1):
+                nivel = [round(self.Subyacente.S0 * (u_temporal**j) * (d_temporal**(t-j)), 6) for j in range(t+1)]
+                nivel.sort()  # ordenado
+                self.agregar_nivel(nivel)
 
 
     # Calculo de Q
@@ -307,7 +493,7 @@ def Black_Scholes(derivado, sigma):
             return -precio
 
     if isinstance(derivado, Put):
-        precio = derivado.K * math.exp(-derivado.r * derivado.T) * norm.cdf(-d2) + derivado.subyacente.S0 * norm.cdf(-d1)
+        precio = derivado.K * math.exp(-derivado.r * derivado.T) * norm.cdf(-d2) - derivado.subyacente.S0 * norm.cdf(-d1)
         if derivado.posicion == "largo":
             return precio
         else:
