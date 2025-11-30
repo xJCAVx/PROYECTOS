@@ -1,253 +1,231 @@
 import streamlit as st
-import plotly.graph_objects as go
-from pyvis.network import Network
-import networkx as nx
+from Funciones_y_clases import Subyacente, Call, Put, Call_Digital, Put_Digital, Arbol_Binomial, Cobertura, grafica_arbol
 
+
+# ------------------------------------------------------ TITULO Y CONFIGURACIÓN ------------------------------------------------------------
+
+# Para ocupar toda la pantalla
 st.set_page_config(layout="wide")
 
-# --- Título principal centrado ---
+# Titulo
 st.markdown("""
-    <h1 style="
-        text-align:center; 
-        font-size:60px; 
-        margin-top:0px; 
-        padding-top:0px;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        color: #1F2937;
-    ">
-    CALCULADORA DE DERIVADOS
-    </h1>
-""", unsafe_allow_html=True)
+            <h1 style="
+                text-align:center; 
+                font-size:60px; 
+                margin-top:0px; 
+                padding-top:0px;
+                font-family: 'Segoe UI';
+                col_or: #000000;
+            ">
+            CALCULADORA DE DERIVADOS
+            </h1>
+            """, unsafe_allow_html=True)
 
-# --- Subtítulo con línea delgada y negra ---
-st.markdown("""
-<div style="
-    display: flex; 
-    align-items: center; 
-    margin-top: 20px; 
-    margin-bottom: 10px;
-">
-    <h3 style="
-        margin: 0; 
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        color: #111827;
-    ">Opción Europea</h3>
-    <div style="
-        flex-grow: 1; 
-        height: 1px; 
-        background-color: black; 
-        margin-left: 15px;
-    "></div>
-</div>
-""", unsafe_allow_html=True)
+# Nota y linea de división
+st.caption("By Josué Carlos Abad Villegas (JCAV)")
+st.markdown( "<hr style='margin:0; padding:0; border: none; border-top: 1px solid #ccc;'>",unsafe_allow_html=True)
 
-# --- Widgets en columnas ---
-col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 2])
+# ------------------------------------------------------- SELECCION DE  DERIVADO -----------------------------------------------------------
 
-with col1:
-    st.write("")
+# Subtitulo
+st.subheader("Selecciona un derivado")
 
-with col2:
-    S0 = st.number_input("Precio inicial S₀", min_value=0.0, step=1.0, format="%.2f")
+# Opciones disponibles
+opciones = {
+            "Call europeo" : Call, 
+            "Put europeo": Put,
+            "Call americano" : Call, 
+            "Put americano" : Put,
+            "Call digital" : Call_Digital,  
+            "Put digital" : Put_Digital
+            }
 
-with col3:
-    K = st.number_input("Strike K", min_value=0.0, step=1.0, format="%.2f")
+# Selección de derivado
+seleccion = st.pills(
+                    label = "Opciones disponibles",
+                    options = opciones.keys(),
+                    selection_mode = "single"
+                    )
 
-with col4:
-    r = st.number_input("Tasa de interés r (%)", min_value=0.0, step=0.1, format="%.2f")
+# Creamos la clase del derivado seleccionado
+if seleccion:
+    derivado_seleccionado = opciones[seleccion]
+    Derivado = derivado_seleccionado(subyacente = None, 
+                                    strike = None, 
+                                    vencimiento = None, 
+                                    periodos = None,
+                                    interes = None, 
+                                    tipo = "americana" if seleccion in ["Call americano", "Put americano"] else "europea",
+                                    posicion = None
+                                    )
 
-with col5:
-    T = st.number_input("Tiempo T (años)", min_value=0.0, step=0.1, format="%.2f")
+# Linea de division
+st.markdown("<hr style='margin:0; padding:0; border: none; border-top: 1px solid #ccc;'>",unsafe_allow_html=True)
 
+# --------------------------------------------------- INPUTS  -------------------------------------------------------------------------
 
-modo = st.radio(
-    "Selecciona el modelo:",
-    ["Discreto (Árbol Binomial)", "Continuo (Black–Scholes)"],
-    horizontal=True
-)
+# Una vez que se haya elegido el derivado
+if seleccion:
 
-st.markdown("---")
+    # Primera parte - Caracteristicas -------------------------------------------------------------------------------------------------
+    
+    st.markdown("#### Caraterísticas:")
+    col_11, col_12, col_13, col_14, col_15 = st.columns(5)
 
-# --- Si elige modo discreto: muestra el árbol ---
-if modo == "Discreto (Árbol Binomial)":
-    # --- Columnas principales ---
-    col_controls, col_graph = st.columns([1, 3])
+    # Determinamos posicion del derivado
+    with col_11:
+        posicion = st.radio("Posicion",["Long", "Short"])
+        Derivado.posicion = posicion
 
-    with col_controls:
-        st.header("Árbol Binomial")
+    # Determinamos strike del derivado
+    with col_12:
+        K = st.number_input("Strike K", min_value=1.0, step=1.0)
+        Derivado.K = K
 
-        tree_type = st.selectbox(
-            "Selecciona el tipo de árbol",
-            ["General", "Recombinante", "Multiplicativo"]
-        )
-        steps = st.slider("Número de pasos / tiempos", 1, 5, 3)
+    # Determinamos vencimiento T
+    with col_13:
+        T = st.number_input("Vencimiento T", min_value=1, value=1, step=1)
+        Derivado.T = T
 
-        # --- Construcción de nodos ---
-        if "nodes" not in st.session_state or st.session_state.get("tree_type") != tree_type or st.session_state.get("steps") != steps:
-            st.session_state["tree_type"] = tree_type
-            st.session_state["steps"] = steps
+    # Determinamos la cantidad de periodos
+    with col_14:
+        N = st.number_input("Periodos N", min_value=1, value=1, step=1)
+        Derivado.N = N
 
-            nodes = []
-            node_id_map = {}
-            counter = 1
+    # Segunda parte - Mercado ---------------------------------------------------------------------------------------------------------
+    
+    st.markdown("#### Mercado:")
+    col_21, col_22, col_23, col_24, col_25 = st.columns(5)
 
-            if tree_type == "General":
-                # Árbol NO recombinante (2^t nodos por paso)
-                for i in range(steps + 1):
-                    row = []
-                    for j in range(2**i):
-                        price = 100 - 5 * (i - j) + 5 * j / 2
-                        node_id = f"{i}-{j}"
-                        node = {
-                            "id": node_id,
-                            "x": i,
-                            "y": float(price),
-                            "label": str(round(price, 2)),
-                            "name": f"S{counter}"
-                        }
-                        counter += 1
-                        row.append(node)
-                        node_id_map[node_id] = node
-                    nodes.append(row)
+    # Determinamos el tipo de la tasa libre de riesgo
+    with col_21:
+        tasa = st.radio("Tipo de tasa",["Discreta","Continua"])
 
-            elif tree_type == "Recombinante":
-                # Árbol clásico (t+1 nodos por paso)
-                for i in range(steps + 1):
-                    row = []
-                    for j in range(i + 1):
-                        price = 100 - 5 * (i - j) + 5 * j
-                        node_id = f"{i}-{j}"
-                        node = {
-                            "id": node_id,
-                            "x": i,
-                            "y": float(price),
-                            "label": str(round(price, 2)),
-                            "name": f"S{counter}"
-                        }
-                        counter += 1
-                        row.append(node)
-                        node_id_map[node_id] = node
-                    nodes.append(row)
+    # Determinamos la tasa libre de riesgo
+    with col_22:
+        r = st.number_input("Tasa libre de riesgo r", min_value = 0.0, max_value = 1.0,step=0.1)
+        Derivado.r = r
 
-            else:
-                # Multiplicativo
-                for i in range(steps + 1):
-                    row = []
-                    for j in range(i + 1):
-                        price = 100 * (1.05 ** j) * (0.95 ** (i - j))
-                        node_id = f"{i}-{j}"
-                        node = {
-                            "id": node_id,
-                            "x": i,
-                            "y": float(price),
-                            "label": str(round(price, 2)),
-                            "name": f"S{counter}"
-                        }
-                        counter += 1
-                        row.append(node)
-                        node_id_map[node_id] = node
-                    nodes.append(row)
+    # Tercera parte - Subyacente ------------------------------------------------------------------------------------------------------
 
-            st.session_state["nodes"] = nodes
-            st.session_state["node_id_map"] = node_id_map
+    st.markdown("#### Subyacente:")
+    col_31, col_32, col_33, col_34, col_35 = st.columns(5)
 
-        else:
-            nodes = st.session_state["nodes"]
-            node_id_map = st.session_state["node_id_map"]
+    # Determinamos el precio inicial del subyacente
+    with col_31:
+        S0 = st.number_input("Precio Inicial So",min_value=1)
+        Subyacente_del_Derivado = Subyacente(S0)
+                                             
+    # Creamos la clase del arbol de precios del derivado
+    with col_32:
+        if "arboles" not in st.session_state:
+            st.session_state.arboles = {}
 
-        # --- Edición de nodo ---
-        selected_node_id = st.selectbox(
-            "Selecciona un nodo",
-            [node["id"] for row in nodes for node in row]
-        )
+        arbol = st.radio("Tipo de arbol",["General","Recombinante","Multiplicativo"])
 
-        new_price = st.number_input(
-            "Nuevo precio del nodo",
-            value=float(node_id_map[selected_node_id]["y"]),
-            step=1.0
-        )
+        if arbol not in st.session_state.arboles:
+            arbol_del_subyacente = Arbol_Binomial(Subyacente_del_Derivado,
+                                                T = Derivado.T,
+                                                N = Derivado.N,
+                                                r = Derivado.r,
+                                                tipo = arbol)
+            # Construir el árbol solo una vez
+            arbol_del_subyacente.arbol_temporal()
 
-        node_id_map[selected_node_id]["y"] = float(new_price)
-        node_id_map[selected_node_id]["label"] = str(round(float(new_price), 2))
+            st.session_state.arboles[arbol] = arbol_del_subyacente
 
-    # --- Conexiones ---
-    edges = []
-    if tree_type == "General":
-        # Cada nodo genera dos nuevos, sin recombinar
-        for i in range(steps):
-            for j in range(len(nodes[i])):
-                parent = nodes[i][j]
-                left = nodes[i + 1][2 * j]
-                right = nodes[i + 1][2 * j + 1]
-                edges.append((parent, left))
-                edges.append((parent, right))
-    else:
-        # Recombinante o multiplicativo
-        for i in range(steps):
-            for j in range(i + 1):
-                parent = nodes[i][j]
-                edges.append((parent, nodes[i + 1][j]))
-                edges.append((parent, nodes[i + 1][j + 1]))
+        arbol_del_subyacente = st.session_state.arboles[arbol]
 
-    # --- Gráfico ---
-    fig = go.Figure()
+    # Determinamos el tipo de subyacente
+    with col_33:
+        dividendo = st.radio("Tipo de Subyacente",["Sin dividendos", "Con dividendos discretos", "Con dividendos continuos"])
+        Subyacente_del_Derivado.tipo_subyacente = dividendo
 
-    # Conexiones
-    for parent, child in edges:
-        fig.add_trace(go.Scatter(
-            x=[parent["x"], child["x"]],
-            y=[parent["y"], child["y"]],
-            mode="lines",
-            line=dict(color="black"),
-            hoverinfo="skip",
-            showlegend=False
-        ))
+        if dividendo == "Con dividendos discretos":
 
-    # Nodos
-    for row in nodes:
-        for node in row:
-            # Precio arriba del nodo (desplazado ligeramente)
-            fig.add_trace(go.Scatter(
-                x=[node["x"]],
-                y=[node["y"] + 2],
-                text=[node["label"]],
-                mode="text",
-                textposition="top center",
-                hoverinfo="text",
-                showlegend=False
-            ))
+            # Determinamos el monto de dividendo
+            with col_34:
+                monto = st.number_input("Dividendo",min_value=0.0,step=1.0)
+                Subyacente_del_Derivado.monto_dividendo = monto
+                
+            # Determinamos la periodicidad del dividendo
+            with col_35:
+                periodicidad =st.radio("Periodicidad",["Anual", "Semestral", "Mensual","Por periodo"], horizontal=False)
+                Subyacente_del_Derivado.periodicidad = periodicidad
 
-            # Nodo azul
-            fig.add_trace(go.Scatter(
-                x=[node["x"]],
-                y=[node["y"]],
-                mode="markers",
-                marker=dict(size=20, color="blue"),
-                hoverinfo="skip",
-                showlegend=False
-            ))
+        elif dividendo == "Con dividendos continuos":
 
-            # Nombre abajo del nodo
-            fig.add_trace(go.Scatter(
-                x=[node["x"]],
-                y=[node["y"] - 2],
-                text=[node["name"]],
-                mode="text",
-                textposition="bottom center",
-                hoverinfo="skip",
-                showlegend=False
-            ))
+            # Determinamos la tasa del dividendo
+            with col_34:
+                tasa = st.number_input("Dividendo",min_value=0.0, step=1.0)
+                Subyacente_del_Derivado.tasa_dividendo = tasa
 
-    # Layout
-    fig.update_layout(
-        dragmode="pan",
-        xaxis=dict(title="Tiempo / Step", showgrid=False, zeroline=False),
-        yaxis=dict(title="Precio del Subyacente", showgrid=False, zeroline=False),
-        height=650
-    )
+            # Determinamos la periodicidad del dividendo
+            with col_35:
+                periodicidad =st.radio("Periodicidad",["Anual", "Semestral", "Mensual","Por periodo"], horizontal=False)
+                Subyacente_del_Derivado.periodicidad = periodicidad
 
-    with col_graph:
+    st.markdown("<hr style='margin:0; padding:0; border: none; border-top: 1px solid #ccc;'>",unsafe_allow_html=True)
+
+    # Cuarta parte - Arbol del subyacente ---------------------------------------------------------------------------------------------
+
+    col_41, col_42 = st.columns([1, 3])
+
+    with col_41:
+        st.markdown(f"#### Arbol de precios ({arbol})")
+
+        if arbol == "General":
+            lista_nombres = arbol_del_subyacente.nombres_nodos()[1:]
+            seleccion_nodo = st.selectbox("Selecciona un nodo", lista_nombres)
+
+            t, j = arbol_del_subyacente.obtener_posicion(seleccion_nodo)
+
+            nuevo_precio = st.number_input("Nuevo precio del nodo",min_value=1.0,step=1.0)
+
+            # 5. Actualizar
+            Boton_precio = st.button("Actualizar precio")
+            if Boton_precio:
+                arbol_del_subyacente.cambiar_nodo(t, j, nuevo_precio)
+
+        elif arbol == "Recombinante":
+            pass
+
+        else:   # Multiplicativo         
+
+            u_nuevo = st.number_input("Valor de u", min_value = 0.0)
+            d_nuevo = st.number_input("Valor de d", min_value = 0.0)
+
+            Boton_arbol =  st.button("Actualizar valores de u y d",type = "secondary")
+            if Boton_arbol:
+               arbol_del_subyacente.u = u_nuevo 
+               arbol_del_subyacente.d = d_nuevo
+               arbol_del_subyacente.construir_arbol_multiplicativo()
+
+        for i in range(12):
+            st.write("")
+        Boton =  st.button("Calcular precio y cobertura del derivado",type = "primary")
+
+    with col_42:
+        fig = grafica_arbol(arbol_del_subyacente, arbol)
         st.plotly_chart(fig, use_container_width=True)
 
-else:
-    st.markdown("### ⚫ Modelo de Black–Scholes")
+    st.markdown("<hr style='margin:0; padding:0; border: none; border-top: 1px solid #ccc;'>",unsafe_allow_html=True)
+
+
+# Quinta Parte - Precio y cobertura ---------------------------------------------------------------------------------------------------
+    if Boton:
+        st.write("Se ejecutó")
+        tab1, tab2, tab3 = st.tabs(["Cat", "Dog", "Owl"])
+        with tab1:
+            st.header("A cat")
+            st.image("https://static.streamlit.io/examples/cat.jpg", width=200)
+        with tab2:
+            st.header("A dog")
+            st.image("https://static.streamlit.io/examples/dog.jpg", width=200)
+        with tab3:
+            st.header("An owl")
+            st.image("https://static.streamlit.io/examples/owl.jpg", width=200)
+
+
+
+        
