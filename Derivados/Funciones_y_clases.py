@@ -15,6 +15,8 @@ def B( r, delta, tiempo):
     else:
         return math.exp( -r * delta)
 
+
+## COMENTAR  ------------------------------------------------------------------------------------------------------------------------------
 def grafica_arbol(arbol, tipo):
     niveles = arbol.niveles
 
@@ -132,6 +134,124 @@ def grafica_arbol(arbol, tipo):
 
     return fig
 
+
+def grafica_cobertura(arbol, cobertura):
+    niveles = arbol.niveles
+    valores = cobertura.valores
+    alphas = cobertura.alphas
+    betas  = cobertura.betas
+    optimos = cobertura.optimos   # para americanas (0/1)
+
+    nodes = []
+    edges = []
+
+    # ------------------------------
+    # Crear nodos (misma estructura del árbol original)
+    # ------------------------------
+    contador = 0
+    for t, nivel in enumerate(niveles):
+        row = []
+        for j, precio_sub in enumerate(nivel):
+
+            # Recuperar los valores correspondientes
+            valor = valores[t][j] if t < len(valores) and j < len(valores[t]) else None
+            alpha = alphas[t][j] if t < len(alphas) and j < len(alphas[t]) else None
+            beta  = betas[t][j]  if t < len(betas)  and j < len(betas[t])  else None
+            optimo = optimos[t][j] if t < len(optimos) and j < len(optimos[t]) else 0
+
+            node = {
+                "id": f"{t}-{j}",
+                "x": t,
+                "y": float(valor) if valor is not None else None,
+                "precio_sub": precio_sub,
+                "valor": valor,
+                "alpha": alpha,
+                "beta": beta,
+                "optimo": optimo,
+                "name": f"V{contador}"
+            }
+
+            contador += 1
+            row.append(node)
+        nodes.append(row)
+
+    # ------------------------------
+    # Conexiones del árbol: igual que en tu gráfica original
+    # ------------------------------
+    for t in range(len(nodes) - 1):
+        nivel_actual = nodes[t]
+        nivel_sig = nodes[t+1]
+
+        for j, parent in enumerate(nivel_actual):
+            if j < len(nivel_sig):
+                edges.append((parent, nivel_sig[j]))
+            if j + 1 < len(nivel_sig):
+                edges.append((parent, nivel_sig[j+1]))
+
+    # ------------------------------
+    # Graficar
+    # ------------------------------
+    fig = go.Figure()
+
+    # Conexiones
+    for parent, child in edges:
+        fig.add_trace(go.Scatter(
+            x=[parent["x"], child["x"]],
+            y=[parent["y"], child["y"]],
+            mode="lines",
+            line=dict(color="gray", width=1),
+            hoverinfo="skip",
+            showlegend=False
+        ))
+
+    # Nodos
+    for row in nodes:
+        x = [n["x"] for n in row]
+        y = [n["y"] for n in row]
+
+        labels = [n["name"] for n in row]
+
+        hovers = [
+            f"Nodo {n['name']}<br>"
+            f"Subyacente: {n['precio_sub']}<br>"
+            f"Valor derivado: {n['valor']}<br>"
+            f"Alpha: {n['alpha']}<br>"
+            f"Beta: {n['beta']}<br>"
+            f"Ejercicio temprano: {'Sí' if n['optimo']==1 else 'No'}"
+            for n in row
+        ]
+
+        colores = [
+            "#d62728" if n["optimo"] == 1 else "#ff7f0e"
+            for n in row
+        ]
+
+        fig.add_trace(go.Scatter(
+            x=x, y=y,
+            mode="markers+text",
+            text=labels,
+            textposition="top center",
+            hovertext=hovers,
+            hoverinfo="text",
+            marker=dict(
+                size=20,
+                color=colores,
+                line=dict(width=1.5, color="black")
+            ),
+            showlegend=False
+        ))
+
+    fig.update_layout(
+        dragmode="pan",
+        xaxis=dict(showgrid=False, zeroline=False, title="Tiempo"),
+        yaxis=dict(showgrid=False, zeroline=False, title="Valor del derivado"),
+        height=650,
+        margin=dict(l=20, r=20, t=20, b=20)
+    )
+
+    return fig
+
+# -------------------------------------------------------------------------------------------------------------------
 
 
 # -------------------------------------------- CLASES -------------------------------------------------
@@ -280,7 +400,7 @@ class Arbol_Binomial:
                 nivel.append(nodo)
             self.niveles.append(nivel)
 
-
+#### COMENTAR -------------------------------------------------------------------------------------------------------------------------
     def nombres_nodos(self):
         lista_ids = []
         indice = 0
@@ -302,16 +422,17 @@ class Arbol_Binomial:
                     return t, j
                 contador += 1
 
+#### ------------------------------------------------------------------------------------------------
 
     # Construccion de arbol General o Recombinante (se le deben pasar una lista con los nodos para cada tiempo)
     def agregar_nivel(self,nodos):
         self.niveles.append(nodos)
 
-    # Para 
-    def cambiar_nodo(self, tiempo, nodo_anterior, nodo_nuevo):
-        self.niveles[tiempo][nodo_anterior]  = nodo_nuevo
+    # Para agregar un solo nodo en particular
+    def cambiar_nodo(self, tiempo, indice_nodo_anterior, nodo_nuevo):
+        self.niveles[tiempo][indice_nodo_anterior]  = nodo_nuevo
 
-
+#  COMENTAR ##################################################
     def arbol_temporal(self):
         if self.tipo == "General":
             self.niveles = [[self.Subyacente.S0]]   
@@ -347,6 +468,7 @@ class Arbol_Binomial:
                 nivel.sort()  # ordenado
                 self.agregar_nivel(nivel)
 
+# COMENTAR#######################################################################3
 
     # Calculo de Q
     def probabilidades_neutras_al_riesgo(self, tiempo):
