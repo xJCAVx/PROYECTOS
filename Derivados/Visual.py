@@ -367,9 +367,10 @@ if seleccion:
 # ----------------------------------------- QUINTA PARTE - PRECIO Y COBERTURA DEL DERIVADO --------------------------------------------
 
     if Boton:
+        
         st.markdown(f"#### Precio y cobertura del Derivado ")
+        col_51, col_52 = st.columns([1,3])
 
-        # tomar los objetos persistentes
         Derivado = st.session_state["Derivado"]
         tipo_arbol = st.session_state["tipo_arbol_seleccionado"]
         arbol_del_subyacente = st.session_state["arboles"][tipo_arbol]
@@ -380,66 +381,70 @@ if seleccion:
         Cobertura_del_Derivado  = Cobertura(Derivado, arbol_del_subyacente)
         Cobertura_del_Derivado.calcular_cobertura("continuo")
 
-        fig_cobertura = grafica_cobertura(arbol_del_subyacente, Cobertura_del_Derivado)
-        st.plotly_chart(fig_cobertura, use_container_width=True)
-
-
-        tabla_valores = []
-        tabla_alphas = []
-        tabla_betas = []
-        tabla_optimos = []
-
-        # ---- VALORES ----
-        numero = 0
-        for tiempo in Cobertura_del_Derivado.valores:
-            for nodo in tiempo:
-                tabla_valores.append({"Nodo": f"V{numero}", "Valor": nodo})
-                numero += 1
-
-        # ---- ALPHAS ----
-        numero = 0
-        for tiempo in Cobertura_del_Derivado.alphas:
-            for nodo in tiempo:
-                tabla_alphas.append({"Nodo": f"ALPHA {numero}", "Valor": nodo})
-                numero += 1
-
-        # ---- BETAS ----
-        numero = 0
-        for tiempo in Cobertura_del_Derivado.betas:
-            for nodo in tiempo:
-                tabla_betas.append({"Nodo": f"BETA {numero}", "Valor": nodo})
-                numero += 1
-
-        # Convertir a DataFrame
-        df_valores = pd.DataFrame(tabla_valores)
-        df_alphas  = pd.DataFrame(tabla_alphas)
-        df_betas   = pd.DataFrame(tabla_betas)
-
-        col_51, col_52, col_53, col_54 = st.columns(4)
-
-        # Mostrar tablas en Streamlit
         with col_51:
-            st.markdown(f"##### Valores del derivado")
-            st.dataframe(df_valores,hide_index=True)
+                
+            tab_1, tab_2, tab_3 = st.tabs(["Valores del Derivado", "Alpha", "Betas"])
+            
+            tabla_valores = []
+            tabla_alphas = []
+            tabla_betas = []
+            tabla_optimos = []
 
-        with col_52:
-            st.markdown("##### Alphas")
-            st.dataframe(df_alphas,hide_index=True)
-
-        with col_53:
-            st.markdown("##### Betas")
-            st.dataframe(df_betas,hide_index=True)
-
-        if seleccion in ["Call americano", "Put americano"]:
-
-            # ---- OPTIMO ----
+            # ---- VALORES ----
             numero = 0
-            for tiempo in Cobertura_del_Derivado.optimos:
+            for tiempo in Cobertura_del_Derivado.valores:
                 for nodo in tiempo:
-                    tabla_optimos.append({"Nodo": f"NODO {numero}", "Valor": "Optimo" if  nodo == 1 else "No Optimo"})
+                    tabla_valores.append({"Nodo": f"V{numero}", "Valor": nodo})
                     numero += 1
 
-            with col_54:
-                st.markdown("##### Nodos optimos")
-                st.dataframe(tabla_optimos,hide_index=True)
-        
+            # ---- ALPHAS ----
+            numero = 0
+            for tiempo in Cobertura_del_Derivado.alphas:
+                for nodo in tiempo:
+                    tabla_alphas.append({"Nodo": f"ALPHA {numero}", "Valor": nodo})
+                    numero += 1
+
+            # ---- BETAS ----
+            numero = 0
+            for tiempo in Cobertura_del_Derivado.betas:
+                for nodo in tiempo:
+                    tabla_betas.append({"Nodo": f"BETA {numero}", "Valor": nodo})
+                    numero += 1
+
+            # Convertir a DataFrame
+            df_valores = pd.DataFrame(tabla_valores)
+            df_alphas  = pd.DataFrame(tabla_alphas)
+            df_betas   = pd.DataFrame(tabla_betas)
+
+            # Mostrar tablas en Streamlit
+            with tab_1:
+                st.markdown(f"##### Valores del derivado")
+                st.dataframe(df_valores,hide_index=True)
+
+            with tab_2:
+                st.markdown("##### Alphas")
+                st.dataframe(df_alphas,hide_index=True)
+
+            with tab_3:
+                st.markdown("##### Betas")
+                st.dataframe(df_betas,hide_index=True)
+
+        with col_52:
+
+            fig_cobertura = grafica_cobertura(arbol_del_subyacente, Cobertura_del_Derivado)
+            st.plotly_chart(fig_cobertura, use_container_width=True)
+
+
+#            if seleccion in ["Call americano", "Put americano"]:
+
+#                # ---- OPTIMO ----
+#                numero = 0
+#                for tiempo in Cobertura_del_Derivado.optimos:
+#                    for nodo in tiempo:
+#                        tabla_optimos.append({"Nodo": f"NODO {numero}", "Valor": "Optimo" if  nodo == 1 else "No Optimo"})
+#                        numero += 1
+
+#                with col_54:
+#                    st.markdown("##### Nodos optimos")
+#                    st.dataframe(tabla_optimos,hide_index=True)
+            
