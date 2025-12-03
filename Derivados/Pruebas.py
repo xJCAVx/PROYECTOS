@@ -7,7 +7,7 @@ from Funciones_y_clases import Subyacente, Fordward, Call, Put, Call_Digital, Pu
 
 print("FORDWARD")
 
-# Crear subyacente
+# Subyacente sin dividendos
 activo = Subyacente(150)
 
 # Forward largo
@@ -105,6 +105,7 @@ print()
 print("ARBOL")
 subyacente1 = Subyacente(120)
 arbol = Arbol_Binomial(subyacente1, 3, 3, r = 0.06, tipo = "multiplicativo", u = 1.7, d = 0.8)
+arbol.construir_arbol_multiplicativo()
 for i in range(len(arbol.niveles)):
     print(arbol.niveles[i]) 
 print()
@@ -244,6 +245,7 @@ subyacente_4 = Subyacente(4)
 contrato4 = Put(subyacente_4,5,1,2,0.25,"americana","largo")
 
 arbol4 = Arbol_Binomial(subyacente_4,1,2,0.5625,"multiplicativo",2,0.5)
+arbol4.construir_arbol_multiplicativo()
 for i in range(len(arbol4.niveles)):
     print(arbol4.niveles[i]) 
 print()
