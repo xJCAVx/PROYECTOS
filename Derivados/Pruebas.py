@@ -242,7 +242,7 @@ print()
 print("OPCIONES AMERICANAS")
 
 subyacente_4 = Subyacente(4)
-contrato4 = Put(subyacente_4,5,1,2,0.25,"americana","largo")
+contrato4 = Put(subyacente_4,5,1,2,0.5625,"americana","largo")
 
 arbol4 = Arbol_Binomial(subyacente_4,1,2,0.5625,"multiplicativo",2,0.5)
 arbol4.construir_arbol_multiplicativo()
