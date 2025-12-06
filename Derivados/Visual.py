@@ -188,9 +188,7 @@ def actualizar_parametro(clase, parametro, nuevo_valor):
 # -------------------------------------------------------- CONFIGURACIÓN DE LA PÁGINA --------------------------------------------------------------
 
 
-# Para ocupar toda la pantalla
-st.set_page_config(layout="wide")
-
+st.set_page_config(layout="wide", page_title="Calculadora de Derivados")
 # Iniciamos las variables y clases en session_state
 iniciar_sesion()
 
