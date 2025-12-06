@@ -368,11 +368,7 @@ if seleccion:
                             arbol_del_subyacente.construir_arbol_multiplicativo()
                         else:
                             arbol_del_subyacente.arbol_temporal()
-            
-            with col_35:
-                periodicidad = st.radio("Periodicidad", 
-                                       ["Anual", "Semestral", "Mensual", "Por periodo"])
-                Subyacente_del_Derivado.periodicidad = periodicidad
+
 
     st.markdown("<hr style='margin:0; padding:0; border: none; border-top: 1px solid #ccc;'>",unsafe_allow_html=True)
 
