@@ -605,7 +605,7 @@ class Arbol_Binomial_Con_Dividendos:
                     Sn = self.niveles[i][j]
                     Sd = self.niveles[i + 1][j]
                     Su = self.niveles[i + 1][j + 1]
-                    q_j = (Sn * math.exp(-r_ajustado * self.delta) - Sd) / (Su - Sd)
+                    q_j = (Sn * math.exp(r_ajustado * self.delta) - Sd) / (Su - Sd)
                     Q_t.append(q_j)
                 self.Q.append(Q_t)
 
