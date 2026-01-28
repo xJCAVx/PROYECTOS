@@ -165,7 +165,8 @@ if seleccion:
         # Si cambió el tipo de dividendo, recrear el árbol
         if st.session_state["tipo_arbol_seleccionado"]:
             crear_modificar_arbol(st.session_state["tipo_arbol_seleccionado"], Derivado)
-        
+    
+
         if dividendo == "Con dividendos discretos":
 
             with col_34:
