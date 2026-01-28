@@ -253,12 +253,10 @@ class Arbol_Binomial:
                 delta_t = paso / (2 ** (t - 1))
                 nivel = []
 
-                if getattr(self.Subyacente,"tipo_subyacente",None) == "Sin dividendos":
-                    # Movimiento del árbol
-                    for p in nivel_prev:
-                        abajo = p - delta_t
-                        arriba = p + delta_t
-                        nivel.extend([abajo, arriba])
+                for p in nivel_prev:
+                    abajo = p - delta_t
+                    arriba = p + delta_t
+                    nivel.extend([abajo, arriba])
 
                 # Dividendo discreto
                 if getattr(self.Subyacente, "tipo_subyacente", None) == "Con dividendos discretos":
